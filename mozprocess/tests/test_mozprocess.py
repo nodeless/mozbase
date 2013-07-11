@@ -166,7 +166,7 @@ class ProcTest(unittest.TestCase):
         """
         p = processhandler.ProcessHandler([self.proclaunch, "process_waittimeout.ini"],
                                           cwd=here)
-        p.run(timeout=10)
+        p.run(timeout=2)
         p.wait()
 
         detected, output = check_for_process(self.proclaunch)
@@ -188,7 +188,7 @@ class ProcTest(unittest.TestCase):
                                           cwd=here)
 
         p.run()
-        p.wait(timeout=5)
+        p.wait(timeout=2)
 
         detected, output = check_for_process(self.proclaunch)
         self.determine_status(detected,
@@ -247,7 +247,7 @@ class ProcTest(unittest.TestCase):
                                           cwd=here)
 
         p.run()
-        p.processOutput(timeout=5)
+        p.processOutput(timeout=2)
         p.wait()
 
         detected, output = check_for_process(self.proclaunch)
