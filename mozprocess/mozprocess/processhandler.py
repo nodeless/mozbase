@@ -91,10 +91,10 @@ class ProcessHandlerMixin(object):
                 subprocess.Popen.__del__(self)
 
         def kill(self):
-            self.returncode = 0
             if mozinfo.isWin:
                 if not self._ignore_children and self._handle and self._job:
                     winprocess.TerminateJobObject(self._job, winprocess.ERROR_CONTROL_C_EXIT)
+                    time.sleep(0.01)
                     self.returncode = winprocess.GetExitCodeProcess(self._handle)
                 elif self._handle:
                     err = None
@@ -102,6 +102,7 @@ class ProcessHandlerMixin(object):
                         winprocess.TerminateProcess(self._handle, winprocess.ERROR_CONTROL_C_EXIT)
                     except:
                         err = "Could not terminate process"
+                    time.sleep(0.01)
                     self.returncode = winprocess.GetExitCodeProcess(self._handle)
                     self._cleanup()
                     if err is not None:
@@ -118,8 +119,9 @@ class ProcessHandlerMixin(object):
                             print >> sys.stdout, "Could not kill process, could not find pid: %s, assuming it's already dead" % self.pid
                 else:
                     os.kill(self.pid, signal.SIGKILL)
-                if self.returncode is None:
-                    self.returncode = subprocess.Popen._internal_poll(self)
+                time.sleep(0.01)
+                # updates self.returncode
+                self.poll()
 
             self._cleanup()
             return self.returncode
@@ -130,8 +132,8 @@ class ProcessHandlerMixin(object):
                 its exit code
                 Returns the main process's exit code
             """
-            # This call will be different for each OS
-            self.returncode = self._wait()
+            # This call will be different for each OS. It will set self.returncode
+            self._wait()
             self._cleanup()
             return self.returncode
 
@@ -492,42 +494,10 @@ falling back to not using job objects for managing child processes"""
                 else:
                     self._handle = None
 
-        elif mozinfo.isMac or mozinfo.isUnix:
+        else: # mac, unix
 
             def _wait(self):
-                """ Haven't found any reason to differentiate between these platforms
-                    so they all use the same wait callback.  If it is necessary to
-                    craft different styles of wait, then a new _wait method
-                    could be easily implemented.
-                """
-
-                if not self._ignore_children:
-                    try:
-                        # os.waitpid returns a (pid, status) tuple
-                        return os.waitpid(self.pid, 0)[1]
-                    except OSError, e:
-                        if getattr(e, "errno", None) != 10:
-                            # Error 10 is "no child process", which could indicate normal
-                            # close
-                            print >> sys.stderr, "Encountered error waiting for pid to close: %s" % e
-                            raise
-                        return 0
-
-                else:
-                    # For non-group wait, call base class
-                    subprocess.Popen.wait(self)
-                    return self.returncode
-
-            def _cleanup(self):
-                pass
-
-        else:
-            # An unrecognized platform, we will call the base class for everything
-            print >> sys.stderr, "Unrecognized platform, process groups may not be managed properly"
-
-            def _wait(self):
-                self.returncode = subprocess.Popen.wait(self)
-                return self.returncode
+                return subprocess.Popen.wait(self)
 
             def _cleanup(self):
                 pass

@@ -10,9 +10,16 @@ import subprocess
 import sys
 import unittest
 from mozprocess import processhandler
+if sys.platform == "win32":
+    from mozprocess import winprocess 
 from time import sleep
 
 here = os.path.dirname(os.path.abspath(__file__))
+
+CODE_SUCCESS = 0
+# Unix: subprocess api returns -N if killed by signal N.
+CODE_SIGKILL = winprocess.ERROR_CONTROL_C_EXIT if sys.platform == "win32" else -9
+CODE_NONE = None
 
 def make_proclaunch(aDir):
     """
@@ -70,7 +77,7 @@ def check_for_process(processName):
         output = p1.communicate()[0]
         detected = False
         for line in output.splitlines():
-            if processName in line:
+            if os.path.basename(processName) in line:
                 detected = True
                 break
     else:
@@ -134,6 +141,7 @@ class ProcTest(unittest.TestCase):
         self.determine_status(detected,
                               output,
                               p.proc.returncode,
+                              CODE_SUCCESS,
                               p.didTimeout)
 
     def test_process_wait(self):
@@ -149,6 +157,7 @@ class ProcTest(unittest.TestCase):
         self.determine_status(detected,
                               output,
                               p.proc.returncode,
+                              CODE_SUCCESS,
                               p.didTimeout)
 
     def test_process_timeout(self):
@@ -164,9 +173,10 @@ class ProcTest(unittest.TestCase):
         self.determine_status(detected,
                               output,
                               p.proc.returncode,
+                              CODE_SIGKILL,
                               p.didTimeout,
                               False,
-                              ['returncode', 'didtimeout'])
+                              ['didtimeout'])
 
     def test_process_waittimeout(self):
         """
@@ -184,9 +194,18 @@ class ProcTest(unittest.TestCase):
         self.determine_status(detected,
                               output,
                               p.proc.returncode,
+                              CODE_NONE,
                               p.didTimeout,
                               True,
                               ())
+        # Process can't be running when we try to delete it in tearDownClass
+        p.kill()
+        detected, output = check_for_process(self.proclaunch)
+        self.determine_status(detected,
+                              output,
+                              p.proc.returncode,
+                              CODE_SIGKILL,
+                              p.didTimeout)
 
     def test_process_waitnotimeout(self):
         """ Process is started, runs to completion before our wait times out
@@ -201,6 +220,7 @@ class ProcTest(unittest.TestCase):
         self.determine_status(detected,
                               output,
                               p.proc.returncode,
+                              CODE_SUCCESS,
                               p.didTimeout)
 
     def test_process_kill(self):
@@ -215,6 +235,7 @@ class ProcTest(unittest.TestCase):
         self.determine_status(detected,
                               output,
                               p.proc.returncode,
+                              CODE_SIGKILL,
                               p.didTimeout)
 
     def test_process_output_twice(self):
@@ -233,14 +254,14 @@ class ProcTest(unittest.TestCase):
         self.determine_status(detected,
                               output,
                               p.proc.returncode,
-                              p.didTimeout,
-                              False,
-                              ())
+                              CODE_SUCCESS,
+                              p.didTimeout)
 
     def determine_status(self,
                          detected=False,
                          output='',
                          returncode=0,
+                         expectedreturncode=0,
                          didtimeout=False,
                          isalive=False,
                          expectedfail=()):
@@ -250,15 +271,13 @@ class ProcTest(unittest.TestCase):
             detected -- value from check_for_process to determine if the process is detected
             output -- string of data from detected process, can be ''
             returncode -- return code from process, defaults to 0
+            expectedreturncode -- expected return code from process, defaults to 0
             didtimeout -- True if process timed out, defaults to False
             isalive -- Use True to indicate we pass if the process exists; however, by default
                        the test will pass if the process does not exist (isalive == False)
             expectedfail -- Defaults to [], used to indicate a list of fields that are expected to fail
         """
-        if 'returncode' in expectedfail:
-            self.assertTrue(returncode, "Detected an unexpected return code of: %s" % returncode)
-        elif not isalive:
-            self.assertTrue(returncode == 0, "Detected non-zero return code of: %d" % returncode)
+        self.assertEquals(returncode, expectedreturncode)
 
         if 'didtimeout' in expectedfail:
             self.assertTrue(didtimeout, "Detected that process didn't time out")
