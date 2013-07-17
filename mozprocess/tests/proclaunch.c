@@ -109,10 +109,10 @@ int main(int argc, char **argv) {
         m = iniparser_getint(dict, maxkey, 10);
         
         // Launch the child process
+        sprintf(cmd, "./proclaunch %d %d &", c, m);
         #ifdef _WIN32
           launchWindows(c, m);
         #else
-          sprintf(cmd, "./proclaunch %d %d &", c, m);
           system(cmd);
         #endif
 
@@ -126,19 +126,15 @@ int main(int argc, char **argv) {
     char cmd[25];
     // This is launching grandchildren, there are no great grandchildren, so we
     // pass in a 0 for the children to spawn.
-    #ifdef _WIN32
-      while(children > 0) {
+    sprintf(cmd, "./proclaunch %d %d &", 0, maxtime); 
+    printf("Launching child process: %s\n", cmd);
+    while (children--  > 0) {
+      #ifdef _WIN32
         launchWindows(0, maxtime);
-        children--;
-      }
-    #else
-      sprintf(cmd, "./proclaunch %d %d &", 0, maxtime); 
-      printf("Launching child process: %s\n", cmd);
-      while (children  > 0) {
+      #else
         system(cmd);
-        children--;
-      }
-    #endif
+      #endif
+    }
   }
 
   /* Now we have launched all the children.  Let's wait for max time before returning

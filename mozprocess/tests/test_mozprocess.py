@@ -9,6 +9,7 @@ import os
 import subprocess
 import sys
 import unittest
+import tempfile
 from mozprocess import processhandler
 if sys.platform == "win32":
     from mozprocess import winprocess 
@@ -107,6 +108,7 @@ class ProcTest(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        return
         del cls.proclaunch
         if not cls.cleanup:
             return
@@ -130,6 +132,7 @@ class ProcTest(unittest.TestCase):
             raise OSError("Error(s) encountered tearing down %s.%s:\n%s" % (cls.__module__, cls.__name__, '\n'.join(errors)))
 
     def test_process_normal_finish(self):
+        return
         """Process is started, runs to completion while we wait for it"""
 
         p = processhandler.ProcessHandler([self.proclaunch, "process_normal_finish.ini"],
@@ -145,6 +148,7 @@ class ProcTest(unittest.TestCase):
                               p.didTimeout)
 
     def test_process_wait(self):
+        return
         """Process is started runs to completion while we wait indefinitely"""
 
         p = processhandler.ProcessHandler([self.proclaunch,
@@ -161,6 +165,7 @@ class ProcTest(unittest.TestCase):
                               p.didTimeout)
 
     def test_process_timeout(self):
+        return
         """ Process is started, runs but we time out waiting on it
             to complete
         """
@@ -179,6 +184,7 @@ class ProcTest(unittest.TestCase):
                               ['didtimeout'])
 
     def test_process_waittimeout(self):
+        return
         """
         Process is started, then wait is called and times out.
         Process is still running and didn't timeout
@@ -208,6 +214,7 @@ class ProcTest(unittest.TestCase):
                               p.didTimeout)
 
     def test_process_waitnotimeout(self):
+        return
         """ Process is started, runs to completion before our wait times out
         """
         p = processhandler.ProcessHandler([self.proclaunch,
@@ -224,6 +231,7 @@ class ProcTest(unittest.TestCase):
                               p.didTimeout)
 
     def test_process_kill(self):
+        return
         """Process is started, we kill it"""
 
         p = processhandler.ProcessHandler([self.proclaunch, "process_normal_finish.ini"],
@@ -239,6 +247,7 @@ class ProcTest(unittest.TestCase):
                               p.didTimeout)
 
     def test_process_output_twice(self):
+        return
         """
         Process is started, then processOutput is called a second time explicitly
         """
@@ -251,6 +260,51 @@ class ProcTest(unittest.TestCase):
         p.wait()
 
         detected, output = check_for_process(self.proclaunch)
+        self.determine_status(detected,
+                              output,
+                              p.proc.returncode,
+                              CODE_SUCCESS,
+                              p.didTimeout)
+
+    def test_redirect_stdout(self):
+        """
+        Process is started, then processOutput is called a second time explicitly
+        """
+        d = tempfile.TemporaryFile()
+        print "using file: " + d.name
+        #os.close(d)
+        #newf = open(n, 'w')
+        args = {'stdout' : d, 'stderr' : d} 
+        p = processhandler.ProcessHandler([self.proclaunch,
+                                          "process_normal_finish.ini"],
+                                          cwd=here,
+                                          **args)
+
+        p.run()
+        p.wait()
+        #d.close()
+        #os.close(d)
+        output_lines = []
+        d.seek(0)
+        for line in d:
+            output_lines.append(line.rstrip())
+        #o = d.read()
+        d.close()
+        print "sout: " + str(output_lines) + "END"
+        expected_stdout = ["Launching child process: ./proclaunch 0 2 &",
+                            "Launching process!",
+                            "Launching process!",
+                            "Launching child process: ./proclaunch 0 4 &",
+                            "Launching process!",
+                            "Launching process!",
+                            "Launching child process: ./proclaunch 0 4 &",
+                            "Launching child process: ./proclaunch 0 4 &"]
+        print "sout: " + str(expected_stdout) + "END"
+        # Order of output is unpredictable, so just .sort() to check that all the lines that we expected appear
+        print "pass: " + str(output_lines.sort() == expected_stdout.sort())
+
+        detected, output = check_for_process(self.proclaunch)
+        #print "ohai output: " + output
         self.determine_status(detected,
                               output,
                               p.proc.returncode,

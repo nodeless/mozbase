@@ -69,6 +69,7 @@ class ProcessHandlerMixin(object):
                 preexec_fn = setpgidfn
 
             try:
+                print "ohai2: " + str(stdout)
                 subprocess.Popen.__init__(self, args, bufsize, executable,
                                           stdin, stdout, stderr,
                                           preexec_fn, close_fds,
