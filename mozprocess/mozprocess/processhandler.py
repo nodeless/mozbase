@@ -37,7 +37,6 @@ class ProcessHandlerMixin(object):
         """
 
         MAX_IOCOMPLETION_PORT_NOTIFICATION_DELAY = 180
-        MAX_PROCESS_KILL_DELAY = 30
 
         def __init__(self,
                      args,
@@ -408,10 +407,7 @@ falling back to not using job objects for managing child processes"""
                     # handling on pre-2.7 versions
                     err = None
                     try:
-                        # timeout is the max amount of time the procmgr thread will wait for
-                        # child processes to shutdown before killing them with extreme prejudice.
-                        item = self._process_events.get(timeout=self.MAX_IOCOMPLETION_PORT_NOTIFICATION_DELAY +
-                                                                self.MAX_PROCESS_KILL_DELAY)
+                        item = self._process_events.get()
                         if item[self.pid] == 'FINISHED':
                             self._process_events.task_done()
                     except:
@@ -589,6 +585,9 @@ falling back to not using job objects for managing child processes"""
 
         # launch the process
         self.proc = self.Process(self.cmd, **args)
+        if self.proc.stdout == None and outputTimeout != None:
+            raise ValueError('outputTimeout cannot be specified' + \
+                ' when stdout is redirected to a file (file: %r)' % args['stdout'])
 
         self.processOutput(timeout=timeout, outputTimeout=outputTimeout)
 
@@ -657,18 +656,40 @@ falling back to not using job objects for managing child processes"""
             self.didTimeout = False
             logsource = self.proc.stdout
 
-            lineReadTimeout = None
-            if timeout:
-                lineReadTimeout = timeout - (datetime.now() - self.startTime).seconds
-            elif outputTimeout:
-                lineReadTimeout = outputTimeout
+            if logsource == None:
+                # If stdout is None, then outputTimeout is
+                # also None, so no need to handle it here
+                if timeout == None:
+                    self.proc.wait()
+                else:
+                    if mozinfo.isWin:
+                        timeoutMillis = timeout * 1000
+                        rc = winprocess.WaitForSingleObject(self.proc._handle, timeoutMillis)
+                        if rc == winprocess.WAIT_TIMEOUT:
+                            self.didTimeout = True
+                    else:
+                        starttime = time.time()
+                        self.didTimeout = True
+                        while time.time() < starttime + timeout - 0.01:
+                            if self.proc.poll() is None:
+                                time.sleep(0.05)
+                            else:
+                                self.didTimeout = False
+                                break
 
-            (line, self.didTimeout) = self.readWithTimeout(logsource, lineReadTimeout)
-            while line != "" and not self.didTimeout:
-                self.processOutputLine(line.rstrip())
+            else:
+                lineReadTimeout = None
                 if timeout:
                     lineReadTimeout = timeout - (datetime.now() - self.startTime).seconds
+                elif outputTimeout:
+                    lineReadTimeout = outputTimeout
+
                 (line, self.didTimeout) = self.readWithTimeout(logsource, lineReadTimeout)
+                while line != "" and not self.didTimeout:
+                    self.processOutputLine(line.rstrip())
+                    if timeout:
+                        lineReadTimeout = timeout - (datetime.now() - self.startTime).seconds
+                    (line, self.didTimeout) = self.readWithTimeout(logsource, lineReadTimeout)
 
             if self.didTimeout:
                 self.proc.kill()
@@ -683,7 +704,6 @@ falling back to not using job objects for managing child processes"""
             self.outThread = threading.Thread(target=_processOutput)
             self.outThread.daemon = True
             self.outThread.start()
-
 
     def wait(self, timeout=None):
         """

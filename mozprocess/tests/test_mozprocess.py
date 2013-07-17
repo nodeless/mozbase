@@ -9,6 +9,7 @@ import os
 import subprocess
 import sys
 import unittest
+import tempfile
 from mozprocess import processhandler
 if sys.platform == "win32":
     from mozprocess import winprocess 
@@ -144,6 +145,35 @@ class ProcTest(unittest.TestCase):
                               CODE_SUCCESS,
                               p.didTimeout)
 
+    def test_process_normal_finish_with_long_wait(self):
+        """
+        Process is started, runs to completion while we wait for it. This tests
+        the case of a process runing longer than the combined time of the two
+        MAX_* fields. Those two win32 control fields in processhandler are
+        tweaked to speed up test time.
+        """
+
+        outfile = tempfile.TemporaryFile()
+        args = {'stdout' : outfile, 'stderr' : outfile}
+        p = processhandler.ProcessHandler([self.proclaunch, "process_normal_finish.ini"],
+                                          cwd=here,
+                                          **args)
+
+        orig_delay = processhandler.ProcessHandlerMixin.Process.MAX_IOCOMPLETION_PORT_NOTIFICATION_DELAY
+        processhandler.ProcessHandlerMixin.Process.MAX_IOCOMPLETION_PORT_NOTIFICATION_DELAY = 2
+        p.run()
+        p.wait()
+
+        processhandler.ProcessHandlerMixin.Process.MAX_IOCOMPLETION_PORT_NOTIFICATION_DELAY = orig_delay
+        outfile.close()
+
+        detected, output = check_for_process(self.proclaunch)
+        self.determine_status(detected,
+                              output,
+                              p.proc.returncode,
+                              CODE_SUCCESS,
+                              p.didTimeout)
+
     def test_process_wait(self):
         """Process is started runs to completion while we wait indefinitely"""
 
@@ -168,6 +198,28 @@ class ProcTest(unittest.TestCase):
                                           cwd=here)
         p.run(timeout=2)
         p.wait()
+
+        detected, output = check_for_process(self.proclaunch)
+        self.determine_status(detected,
+                              output,
+                              p.proc.returncode,
+                              CODE_SIGKILL,
+                              p.didTimeout,
+                              False,
+                              ['didtimeout'])
+
+    def test_process_timeout_with_stdout_redirect(self):
+        """ Process is started with stdout redirected, runs but we
+            time out waiting on it to complete
+        """
+        outfile = tempfile.TemporaryFile()
+        args = {'stdout' : outfile, 'stderr' : outfile} 
+        p = processhandler.ProcessHandler([self.proclaunch, "process_waittimeout.ini"],
+                                          cwd=here,
+                                          **args)
+        p.run(timeout=2)
+        p.wait()
+        outfile.close()
 
         detected, output = check_for_process(self.proclaunch)
         self.determine_status(detected,
@@ -249,6 +301,39 @@ class ProcTest(unittest.TestCase):
         p.run()
         p.processOutput(timeout=2)
         p.wait()
+
+        detected, output = check_for_process(self.proclaunch)
+        self.determine_status(detected,
+                              output,
+                              p.proc.returncode,
+                              CODE_SUCCESS,
+                              p.didTimeout)
+
+    def test_redirect_stdout(self):
+        """
+        Process is started with output redirected to a file. Wait for completion, then check for expected output
+        """
+        outfile = tempfile.TemporaryFile()
+        args = {'stdout' : outfile, 'stderr' : outfile} 
+        p = processhandler.ProcessHandler([self.proclaunch,
+                                          "process_normal_finish.ini"],
+                                          cwd=here,
+                                          **args)
+
+        p.run()
+        p.wait()
+
+        outfile.flush()
+        outfile.seek(0)
+        output_lines = []
+        for line in outfile:
+            output_lines.append(line.rstrip())
+        outfile.close()
+        expected_stdout = ["Launching child process: ./proclaunch 0 2 &",
+                            "Launching child process: ./proclaunch 0 4 &",
+                            "Launching child process: ./proclaunch 0 4 &",
+                            "Launching child process: ./proclaunch 0 4 &"]
+        self.assertEquals(sorted(output_lines), sorted(expected_stdout))
 
         detected, output = check_for_process(self.proclaunch)
         self.determine_status(detected,
