@@ -591,6 +591,7 @@ falling back to not using job objects for managing child processes"""
         # launch the process
         self.proc = self.Process(self.cmd, **args)
 
+        print "ohai: about to start"
         self.processOutput(timeout=timeout, outputTimeout=outputTimeout)
 
     def kill(self):
@@ -681,6 +682,7 @@ falling back to not using job objects for managing child processes"""
             self.run()
 
         if not self.outThread:
+            print "ohai starting"
             self.outThread = threading.Thread(target=_processOutput)
             self.outThread.daemon = True
             self.outThread.start()

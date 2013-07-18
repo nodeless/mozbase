@@ -275,6 +275,7 @@ class ProcTest(unittest.TestCase):
         #os.close(d)
         #newf = open(n, 'w')
         args = {'stdout' : d, 'stderr' : d} 
+        #args = {}
         p = processhandler.ProcessHandler([self.proclaunch,
                                           "process_normal_finish.ini"],
                                           cwd=here,
@@ -290,7 +291,6 @@ class ProcTest(unittest.TestCase):
             output_lines.append(line.rstrip())
         #o = d.read()
         d.close()
-        print "sout: " + str(output_lines) + "END"
         expected_stdout = ["Launching child process: ./proclaunch 0 2 &",
                             "Launching process!",
                             "Launching process!",
@@ -299,9 +299,12 @@ class ProcTest(unittest.TestCase):
                             "Launching process!",
                             "Launching child process: ./proclaunch 0 4 &",
                             "Launching child process: ./proclaunch 0 4 &"]
-        print "sout: " + str(expected_stdout) + "END"
+        output_lines.sort()
+        expected_stdout.sort()
+        print "sout1: " + str(output_lines) + "END"
+        print "sout2: " + str(expected_stdout) + "END"
         # Order of output is unpredictable, so just .sort() to check that all the lines that we expected appear
-        print "pass: " + str(output_lines.sort() == expected_stdout.sort())
+        print "passfoo: " + str(output_lines == expected_stdout)
 
         detected, output = check_for_process(self.proclaunch)
         #print "ohai output: " + output
