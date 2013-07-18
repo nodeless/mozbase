@@ -108,7 +108,6 @@ class ProcTest(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        return
         del cls.proclaunch
         if not cls.cleanup:
             return
@@ -274,8 +273,8 @@ class ProcTest(unittest.TestCase):
         print "using file: " + d.name
         #os.close(d)
         #newf = open(n, 'w')
-        args = {'stdout' : d, 'stderr' : d} 
         #args = {}
+        args = {'stdout' : d, 'stderr' : d} 
         p = processhandler.ProcessHandler([self.proclaunch,
                                           "process_normal_finish.ini"],
                                           cwd=here,
@@ -285,6 +284,8 @@ class ProcTest(unittest.TestCase):
         p.wait()
         #d.close()
         #os.close(d)
+        sleep(4)
+        d.flush()
         output_lines = []
         d.seek(0)
         for line in d:
@@ -292,18 +293,13 @@ class ProcTest(unittest.TestCase):
         #o = d.read()
         d.close()
         expected_stdout = ["Launching child process: ./proclaunch 0 2 &",
-                            "Launching process!",
-                            "Launching process!",
                             "Launching child process: ./proclaunch 0 4 &",
-                            "Launching process!",
-                            "Launching process!",
                             "Launching child process: ./proclaunch 0 4 &",
                             "Launching child process: ./proclaunch 0 4 &"]
-        output_lines.sort()
-        expected_stdout.sort()
+        #output_lines.sort()
+        #expected_stdout.sort()
         print "sout1: " + str(output_lines) + "END"
         print "sout2: " + str(expected_stdout) + "END"
-        # Order of output is unpredictable, so just .sort() to check that all the lines that we expected appear
         print "passfoo: " + str(output_lines == expected_stdout)
 
         detected, output = check_for_process(self.proclaunch)

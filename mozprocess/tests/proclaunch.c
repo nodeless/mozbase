@@ -26,7 +26,6 @@ int launchWindows(int children, int maxtime) {
   
   ZeroMemory(&procinfo, sizeof(PROCESS_INFORMATION));
   
-  printf("Launching process!\n");
   rv = CreateProcess(NULL,
                 cmdline,
                 NULL,
