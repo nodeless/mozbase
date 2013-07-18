@@ -284,7 +284,8 @@ class ProcTest(unittest.TestCase):
         p.wait()
         #d.close()
         #os.close(d)
-        sleep(4)
+        # p.wait() does not wait for child processes, so sleep() for them
+        sleep(2)
         d.flush()
         output_lines = []
         d.seek(0)
@@ -300,7 +301,8 @@ class ProcTest(unittest.TestCase):
         #expected_stdout.sort()
         print "sout1: " + str(output_lines) + "END"
         print "sout2: " + str(expected_stdout) + "END"
-        print "passfoo: " + str(output_lines == expected_stdout)
+        #print "passfoo: " + str(output_lines == expected_stdout)
+        self.assertEquals(output_lines, expected_stdout)
 
         detected, output = check_for_process(self.proclaunch)
         #print "ohai output: " + output
