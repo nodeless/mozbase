@@ -179,6 +179,28 @@ class ProcTest(unittest.TestCase):
                               False,
                               ['didtimeout'])
 
+    def test_process_timeout_with_stdout_redirect(self):
+        """ Process is started, runs but we time out waiting on it
+            to complete
+        """
+        outfile = tempfile.TemporaryFile()
+        args = {'stdout' : outfile, 'stderr' : outfile} 
+        p = processhandler.ProcessHandler([self.proclaunch, "process_waittimeout.ini"],
+                                          cwd=here,
+                                          **args)
+        p.run(timeout=2)
+        p.wait()
+        outfile.close()
+
+        detected, output = check_for_process(self.proclaunch)
+        self.determine_status(detected,
+                              output,
+                              p.proc.returncode,
+                              CODE_SIGKILL,
+                              p.didTimeout,
+                              False,
+                              ['didtimeout'])
+
     def test_process_waittimeout(self):
         """
         Process is started, then wait is called and times out.

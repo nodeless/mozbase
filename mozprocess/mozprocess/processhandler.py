@@ -690,27 +690,36 @@ falling back to not using job objects for managing child processes"""
                 self.proc.wait()
                 self.onFinish()
             else:
-                starttime = time.time()
+                if mozinfo.isWin:
+                    timeout = timeout * 1000
+                    rc = winprocess.WaitForSingleObject(self.proc._handle, timeout)
+                    if rc == winprocess.WAIT_TIMEOUT:
+                        self.didTimeout = True
+                        self.kill()
+                    else:
+                        self.returncode = winprocess.GetExitCodeProcess(self.proc._handle)
+                else:
+                    starttime = time.time()
 
-                # Make sure there is a signal handler for SIGCHLD installed
-                oldsignal = signal.signal(signal.SIGCHLD, lambda : None)
+                    # Make sure there is a signal handler for SIGCHLD installed
+                    oldsignal = signal.signal(signal.SIGCHLD, lambda : None)
 
-                while time.time() < starttime + timeout - 0.01:
-                    pid, sts = os.waitpid(self.pid, os.WNOHANG)
-                    if pid != 0:
-                        self._handle_exitstatus(sts)
-                        signal.signal(signal.SIGCHLD, oldsignal)
-                        self.onFinish()
-                        return self.returncode
-                    
-                    # time.sleep is interrupted by signals (good!)
-                    newtimeout = timeout - time.time() + starttime
-                    time.sleep(newtimeout)
+                    while time.time() < starttime + timeout - 0.01:
+                        pid, sts = os.waitpid(self.pid, os.WNOHANG)
+                        if pid != 0:
+                            self._handle_exitstatus(sts)
+                            signal.signal(signal.SIGCHLD, oldsignal)
+                            self.onFinish()
+                            return self.returncode
+                        
+                        # time.sleep is interrupted by signals (good!)
+                        newtimeout = timeout - time.time() + starttime
+                        time.sleep(newtimeout)
 
-                signal.signal(signal.SIGCHLD, oldsignal)
-                self.didTimeout = True
-                self.kill()
-                self.onTimeout()
+                    signal.signal(signal.SIGCHLD, oldsignal)
+                    self.didTimeout = True
+                    self.kill()
+                    self.onTimeout()
         else:
             if not self.outThread:
                 self.outThread = threading.Thread(target=_processOutput)
