@@ -660,18 +660,45 @@ falling back to not using job objects for managing child processes"""
             self.didTimeout = False
             logsource = self.proc.stdout
 
-            lineReadTimeout = None
-            if timeout:
-                lineReadTimeout = timeout - (datetime.now() - self.startTime).seconds
-            elif outputTimeout:
-                lineReadTimeout = outputTimeout
+            if logsource == None:
+                # If stdout is None, then outputTimeout is
+                # also None, so no need to handle it here
+                if timeout == None:
+                    # in this case, run() is a blocking call
+                    self.proc.wait()
+                    #self.onFinish()
+                else:
+                    if mozinfo.isWin:
+                        timeoutMillis = timeout * 1000
+                        rc = winprocess.WaitForSingleObject(self.proc._handle, timeoutMillis)
+                        if rc == winprocess.WAIT_TIMEOUT:
+                            self.didTimeout = True
+                            self.kill()
+                        else:
+                            self.returncode = winprocess.GetExitCodeProcess(self.proc._handle)
+                    else:
+                        starttime = time.time()
+                        self.didTimeout = True
+                        while time.time() < starttime + timeout - 0.01:
+                            if self.proc.poll() is None:
+                                time.sleep(0.05)
+                            else:
+                                self.didTimeout = False
+                                break
 
-            (line, self.didTimeout) = self.readWithTimeout(logsource, lineReadTimeout)
-            while line != "" and not self.didTimeout:
-                self.processOutputLine(line.rstrip())
+            else:
+                lineReadTimeout = None
                 if timeout:
                     lineReadTimeout = timeout - (datetime.now() - self.startTime).seconds
+                elif outputTimeout:
+                    lineReadTimeout = outputTimeout
+
                 (line, self.didTimeout) = self.readWithTimeout(logsource, lineReadTimeout)
+                while line != "" and not self.didTimeout:
+                    self.processOutputLine(line.rstrip())
+                    if timeout:
+                        lineReadTimeout = timeout - (datetime.now() - self.startTime).seconds
+                    (line, self.didTimeout) = self.readWithTimeout(logsource, lineReadTimeout)
 
             if self.didTimeout:
                 self.proc.kill()
@@ -681,51 +708,10 @@ falling back to not using job objects for managing child processes"""
 
         if not hasattr(self, 'proc'):
             self.run()
-        if self.proc.stdout == None:
-            self.didTimeout = False
-            # If stdout is None, then outputTimeout is
-            # also None, so no need to handle it here
-            if timeout == None:
-                # in this case, run() is a blocking call
-                self.proc.wait()
-                self.onFinish()
-            else:
-                if mozinfo.isWin:
-                    timeout = timeout * 1000
-                    rc = winprocess.WaitForSingleObject(self.proc._handle, timeout)
-                    if rc == winprocess.WAIT_TIMEOUT:
-                        self.didTimeout = True
-                        self.kill()
-                    else:
-                        self.returncode = winprocess.GetExitCodeProcess(self.proc._handle)
-                else:
-                    starttime = time.time()
-
-                    # Make sure there is a signal handler for SIGCHLD installed
-                    oldsignal = signal.signal(signal.SIGCHLD, lambda : None)
-
-                    while time.time() < starttime + timeout - 0.01:
-                        pid, sts = os.waitpid(self.pid, os.WNOHANG)
-                        if pid != 0:
-                            self._handle_exitstatus(sts)
-                            signal.signal(signal.SIGCHLD, oldsignal)
-                            self.onFinish()
-                            return self.returncode
-                        
-                        # time.sleep is interrupted by signals (good!)
-                        newtimeout = timeout - time.time() + starttime
-                        time.sleep(newtimeout)
-
-                    signal.signal(signal.SIGCHLD, oldsignal)
-                    self.didTimeout = True
-                    self.kill()
-                    self.onTimeout()
-        else:
-            if not self.outThread:
-                self.outThread = threading.Thread(target=_processOutput)
-                self.outThread.daemon = True
-                self.outThread.start()
-
+        if not self.outThread:
+            self.outThread = threading.Thread(target=_processOutput)
+            self.outThread.daemon = True
+            self.outThread.start()
 
     def wait(self, timeout=None):
         """
